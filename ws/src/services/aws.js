@@ -4,7 +4,7 @@ module.exports = {
   IAM_USER_KEY: '',
   IAM_USER_SECRET: '',
   BUCKET_NAME: '',
-  AWS_REGION: '',
+  AWS_REGION: 'us-east-2',
   uploadToS3: function (file, filename, acl = 'public-read') {
     return new Promise((resolve, reject) => {
       let IAM_USER_KEY = this.IAM_USER_KEY;
@@ -28,7 +28,7 @@ module.exports = {
         s3bucket.upload(params, function (err, data) {
           if (err) {
             console.log(err);
-            return resolve({ error: true, message: err });
+            return resolve({ error: true, message: err.message });
           }
           console.log(data);
           return resolve({ error: false, message: data });
