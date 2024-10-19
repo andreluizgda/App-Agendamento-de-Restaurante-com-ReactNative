@@ -1,61 +1,51 @@
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
-const Busboy = require('busboy'); // Certifique-se de que esta linha está correta
-const aws = require('../services/aws');
-const Arquivo = require('../models/arquivo');
-const Servico = require('../models/servico');
 
-router.post('/', (req, res) => {
-    let busboy = new Busboy({ headers: req.headers }); // Corrigido para headers (plural)
-    busboy.on('finish', async () => {
-        try {
-            const { restauranteID, servico } = req.body;
-            let errors = [];
-            let arquivos = [];
+// Configuração do multer para aceitar arquivos em memória
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
-            if (req.files && Object.keys(req.files).length > 0) { // Corrigido para .length
-                for (let key of Object.keys(req.files)) {
-                    const file = req.files[key];
+// Rota para upload de arquivo
+router.post('/', upload.fields([{ name: 'file' }, { name: 'jsonFile' }]), (req, res) => {
+    console.log('Campos recebidos:', req.files);
+    
+    if (!req.files || !req.files.file || !req.files.jsonFile) {
+        return res.status(400).send('É necessário enviar uma imagem e um arquivo JSON.');
+    }
 
-                    const nameParts = file.name.split('.'); // Corrigido para split
-                    const fileName = `${new Date().getTime()}.${nameParts[nameParts.length - 1]}`;
+    const { file, jsonFile } = req.files;
 
-                    const path = `servicos/${restauranteID}/${fileName}`;
+    if (!file || !jsonFile) {
+        return res.status(400).send('É necessário enviar uma imagem e um arquivo JSON.');
+    }
 
-                    const response = await aws.uploadToS3(file, path);
+    try {
+        const { restauranteID } = req.body;
+        console.log('restauranteID:', restauranteID);
 
-                    if (response.error) {
-                        errors.push({ error: true, message: response.message.message });
-                    } else {
-                        arquivos.push(path);
-                    }
-                }
-            }
-
-            if (errors.length > 0) {
-                res.json(errors[0]);
-                return false;
-            }
-
-            // Criar serviço
-            let jsonServico = JSON.parse(servico);
-            const servicoCadastrado = await Servico(jsonServico).save();
-
-            // Criar arquivo
-            arquivos = arquivos.map(arquivo => ({
-                referenciaID: servicoCadastrado._id,
-                model: 'Servico',
-                caminho: arquivo,
-            }));
-
-            await Arquivo.insertMany(arquivos);
-
-            res.json({ servico: servicoCadastrado, arquivos });
-        } catch (err) {
-            res.status(400).json({ error: true, message: err.message });
+        // Verifica se restauranteID está definido
+        if (!restauranteID) {
+            return res.status(400).send('restauranteID é obrigatório.');
         }
-    });
-    req.pipe(busboy); // Certifique-se de que esta linha esteja presente
+
+        // Lógica para processar o arquivo JSON
+        const jsonData = JSON.parse(jsonFile[0].buffer.toString());
+        console.log('Dados do JSON:', jsonData);
+
+        // Lógica para processar o arquivo de imagem
+        const imageName = `${Date.now()}-${file[0].originalname}`;
+        const imagePath = `servicos/${restauranteID}/images/${imageName}`;
+        console.log('Caminho da imagem:', imagePath);
+
+        // Aqui você deve adicionar a lógica de upload para o S3 ou o que você estiver usando
+
+        res.status(201).json({ message: 'Upload concluído!', filename: imageName, jsonData });
+    } catch (err) {
+        console.error('Erro ao processar a solicitação:', err);
+        res.status(500).send('Erro ao processar a solicitação: ' + err.message);
+    }
 });
+
 
 module.exports = router;
