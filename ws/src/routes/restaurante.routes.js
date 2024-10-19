@@ -3,18 +3,33 @@ const router = express.Router();
 const Restaurante = require('../models/restaurante');
 const Servico = require('../models/servico');
 
-// Rota para criar um novo restaurante
+// Função de validação atualizada para verificar o campo 'endereco'
+const validarDadosRestaurante = (dados) => {
+    if (!dados.nome || !dados.endereco) {
+        throw new Error('Nome e endereço são obrigatórios');
+    }
+
+    // Verifica se os detalhes da localização dentro de 'endereco' estão presentes
+    const { cidade, uf, cep, numero, pais } = dados.endereco;
+    if (!cidade || !uf || !cep || !numero || !pais) {
+        throw new Error('Todos os campos de endereço são obrigatórios');
+    }
+};
+
 router.post('/', async (req, res) => {
     try {
+        // Valida os dados do restaurante
+        validarDadosRestaurante(req.body);
+
         const restaurante = await new Restaurante(req.body).save();
-        res.status(201).json(restaurante); // Adiciona status 201 (Created)
+        res.status(201).json({ restaurante });
+
     } catch (err) {
-        res.status(400).json({ error: true, message: err.message }); // Status 400 em caso de erro
+        res.status(400).json({ error: true, message: err.message });
     }
 });
 
-// Rota para obter os serviços ativos de um restaurante
-router.get('/servicos/:restauranteID', async (req, res) => {
+router.get('/servico/:restauranteID', async (req, res) => {
     try {
         const { restauranteID } = req.params;
         const servicos = await Servico.find({
@@ -22,7 +37,6 @@ router.get('/servicos/:restauranteID', async (req, res) => {
             status: 'A'
         }).select('_id titulo');
 
-        // Retorna os serviços em um formato label-value
         res.json({
             servicos: servicos.map(s => ({ label: s.titulo, value: s._id }))
         });

@@ -20,6 +20,7 @@ app.set('port', 8000);
 app.use('/restaurante',require('./src/routes/restaurante.routes'))
 app.use('/servico',require('./src/routes/servico.routes'))
 
+
 // INICIAR O SERVIDOR
 app.listen(app.get('port'), () => {
     console.log(`WS Escutando na Porta ${app.get('port')}`);
