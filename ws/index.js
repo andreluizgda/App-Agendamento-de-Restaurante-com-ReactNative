@@ -1,30 +1,29 @@
 const express = require('express');
-const busboy = require('connect-busboy');
-const morgan = require('morgan');
-require('./database'); // Certifique-se de que o arquivo de conexão com o MongoDB está correto
-
 const app = express();
+const morgan = require('morgan');
+const busboy = require('connect-busboy');
+const busboyBodyParser = require('busboy-body-parser');
+const cors = require('cors');
 
-// MIDDLEWARES
-app.use(morgan('dev')); // Para logar requisições
-app.use(busboy()); // Middleware para o Busboy
-app.use(express.json()); // Para analisar requisições JSON
-app.use(express.urlencoded({ extended: true })); // Para analisar requisições URL-encoded
+// DATABASE
+require('./database');
 
-// VARIABLES
-app.set('port', process.env.PORT || 8000); // Use variável de ambiente para a porta
+app.use(morgan('dev'));
+app.use(busboy());
+app.use(busboyBodyParser());
+app.use(express.json());
+app.use(cors());
 
-// ROTAS
+app.set('port', 8000);
+
+/* ROTAS */
 app.use('/restaurante', require('./src/routes/restaurante.routes'));
+// app.use('/cliente', require('./src/routes/cliente.routes'));
 app.use('/servico', require('./src/routes/servico.routes'));
+// app.use('/colaborador', require('./src/routes/colaborador.routes'));
+// app.use('/horario', require('./src/routes/horario.routes'));
+// app.use('/agendamento', require('./src/routes/agendamento.routes'));
 
-// Middleware de tratamento de erros
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).send('Algo deu errado!'); // Resposta genérica para erros
-});
-
-// INICIAR O SERVIDOR
-app.listen(app.get('port'), () => {
-    console.log(`WS Escutando na Porta ${app.get('port')}`);
+app.listen(app.get('port'), function () {
+  console.log('WS escutando porta ' + app.get('port'));
 });
