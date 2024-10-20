@@ -1,51 +1,189 @@
 const express = require('express');
-const multer = require('multer');
 const router = express.Router();
+const Busboy = require('busboy');
+const aws = require('../services/aws');
+const Servico = require('../models/servico');
+const Arquivo = require('../models/arquivo');
+// const moment = require('moment');
 
-// Configuração do multer para aceitar arquivos em memória
-const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
-
-// Rota para upload de arquivo
-router.post('/', upload.fields([{ name: 'file' }, { name: 'jsonFile' }]), (req, res) => {
-    console.log('Campos recebidos:', req.files);
-    
-    if (!req.files || !req.files.file || !req.files.jsonFile) {
-        return res.status(400).send('É necessário enviar uma imagem e um arquivo JSON.');
-    }
-
-    const { file, jsonFile } = req.files;
-
-    if (!file || !jsonFile) {
-        return res.status(400).send('É necessário enviar uma imagem e um arquivo JSON.');
-    }
-
+/*
+  FAZER NA #01
+*/
+router.post('/', async (req, res) => {
+    const busboy = Busboy({ headers: req.headers });
+  busboy.on('finish', async () => {
     try {
-        const { restauranteID } = req.body;
-        console.log('restauranteID:', restauranteID);
+      let errors = [];
+      let arquivos = [];
 
-        // Verifica se restauranteID está definido
-        if (!restauranteID) {
-            return res.status(400).send('restauranteID é obrigatório.');
+      if (req.files && Object.keys(req.files).length > 0) {
+        for (let key of Object.keys(req.files)) {
+          const file = req.files[key];
+
+          const nameParts = file.name.split('.');
+          const fileName = `${new Date().getTime()}.${
+            nameParts[nameParts.length - 1]
+          }`;
+          const path = `servicos/${req.body.restauranteID}/${fileName}`;
+
+          const response = await aws.uploadToS3(
+            file,
+            path
+            //, acl = https://docs.aws.amazon.com/pt_br/AmazonS3/latest/dev/acl-overview.html
+          );
+
+          if (response.error) {
+            errors.push({ error: true, message: response.message.message });
+          } else {
+            arquivos.push(path);
+          }
         }
+      }
 
-        // Lógica para processar o arquivo JSON
-        const jsonData = JSON.parse(jsonFile[0].buffer.toString());
-        console.log('Dados do JSON:', jsonData);
+      if (errors.length > 0) {
+        res.json(errors[0]);
+        return false;
+      }
 
-        // Lógica para processar o arquivo de imagem
-        const imageName = `${Date.now()}-${file[0].originalname}`;
-        const imagePath = `servicos/${restauranteID}/images/${imageName}`;
-        console.log('Caminho da imagem:', imagePath);
+      // CRIAR SERVIÇO
+      let jsonServico = JSON.parse(req.body.servico);
+      jsonServico.restauranteID = req.body.restauranteID;
+      const servico = await new Servico(jsonServico).save();
 
-        // Aqui você deve adicionar a lógica de upload para o S3 ou o que você estiver usando
+      // CRIAR ARQUIVO
+      arquivos = arquivos.map((arquivo) => ({
+        referenciaId: servico._id,
+        model: 'Servico',
+        arquivo,
+      }));
+      await Arquivo.insertMany(arquivos);
 
-        res.status(201).json({ message: 'Upload concluído!', filename: imageName, jsonData });
+      res.json({ error: false, arquivos });
     } catch (err) {
-        console.error('Erro ao processar a solicitação:', err);
-        res.status(500).send('Erro ao processar a solicitação: ' + err.message);
+      res.json({ error: true, message: err.message });
     }
+  });
+  req.pipe(busboy);
 });
 
+/*
+  FAZER NA #01
+*/
+router.put('/:id', async (req, res) => {
+  var busboy = new Busboy({ headers: req.headers });
+  busboy.on('finish', async () => {
+    try {
+      let errors = [];
+      let arquivos = [];
+
+      if (req.files && Object.keys(req.files).length > 0) {
+        for (let key of Object.keys(req.files)) {
+          const file = req.files[key];
+
+          const nameParts = file.name.split('.');
+          const fileName = `${new Date().getTime()}.${
+            nameParts[nameParts.length - 1]
+          }`;
+          const path = `servicos/${req.body.restauranteID}/${fileName}`;
+
+          const response = await aws.uploadToS3(
+            file,
+            path
+            //, acl = https://docs.aws.amazon.com/pt_br/AmazonS3/latest/dev/acl-overview.html
+          );
+
+          if (response.error) {
+            errors.push({ error: true, message: response.message.message });
+          } else {
+            arquivos.push(path);
+          }
+        }
+      }
+
+      if (errors.length > 0) {
+        res.json(errors[0]);
+        return false;
+      }
+
+      //  ATUALIZAR SERVIÇO
+      let jsonServico = JSON.parse(req.body.servico);
+      await Servico.findByIdAndUpdate(req.params.id, jsonServico);
+
+      // CRIAR ARQUIVO
+      arquivos = arquivos.map((arquivo) => ({
+        referenciaId: req.params.id,
+        model: 'Servico',
+        arquivo,
+      }));
+      await Arquivo.insertMany(arquivos);
+
+      res.json({ error: false });
+    } catch (err) {
+      res.json({ error: true, message: err.message });
+    }
+  });
+  req.pipe(busboy);
+});
+
+/*
+  FAZER NA #01
+*/
+router.get('/restaurante/:restauranteID', async (req, res) => {
+  try {
+    let servicosRestaurante = [];
+    const servicos = await Servico.find({
+        restauranteID: req.params.restauranteID,
+      status: { $ne: 'E' },
+    });
+
+    for (let servico of servicos) {
+      const arquivos = await Arquivos.find({
+        model: 'Servico',
+        referenciaId: servico._id,
+      });
+      servicosRestaurante.push({ ...servico._doc, arquivos });
+    }
+
+    res.json({
+      error: false,
+      servicos: servicosRestaurante,
+    });
+  } catch (err) {
+    res.json({ error: true, message: err.message });
+  }
+});
+
+/*
+  FAZER NA #01
+*/
+router.post('/remove-arquivo', async (req, res) => {
+  try {
+    const { arquivo } = req.body;
+
+    // EXCLUIR DA AWS
+    await aws.deleteFileS3(arquivo);
+
+    // EXCLUIR DO BANCO DE DADOS
+    await Arquivo.findOneAndDelete({
+      arquivo,
+    });
+
+    res.json({ error: false, message: 'Erro ao excluir o arquivo!' });
+  } catch (err) {
+    res.json({ error: true, message: err.message });
+  }
+});
+
+/*
+  FAZER NA #01
+*/
+router.delete('/:id', async (req, res) => {
+  try {
+    await Servico.findByIdAndUpdate(req.params.id, { status: 'E' });
+    res.json({ error: false });
+  } catch (err) {
+    res.json({ error: true, message: err.message });
+  }
+});
 
 module.exports = router;
