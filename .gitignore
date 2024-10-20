@@ -1,0 +1,28 @@
+# Node modules
+node_modules/
+
+# Environment variables
+.env
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Build directories
+dist/
+build/
+
+# Sistema de arquivos do Mac
+.DS_Store
+
+# Sistema de arquivos do Windows
+Thumbs.db
+
+# Configurações do IDE
+.vscode/
+.idea/
+
+# Outras pastas temporárias
+tmp/
+temp/
